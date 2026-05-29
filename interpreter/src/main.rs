@@ -11,6 +11,7 @@ mod parser;
 use crate::{
     error::{Error, Result},
     lexer::{Lexer, TokenKind},
+    parser::Parser,
 };
 
 fn main() -> Result<()> {
@@ -70,14 +71,22 @@ fn run_repl() -> Result<()> {
 
 fn run(src: &str) -> Result<()> {
     let mut lexer = Lexer::new(src);
+    let mut tokens = Vec::new();
 
     loop {
         let token = lexer.next_token();
 
         match token.kind {
             TokenKind::Eof => break,
-            _ => println!("{token:?}"),
+            _ => (),
         }
+
+        tokens.push(token);
+    }
+
+    let mut parser = Parser::new(tokens);
+    if let Some(expr) = parser.parse() {
+        println!("{expr}");
     }
 
     Ok(())
