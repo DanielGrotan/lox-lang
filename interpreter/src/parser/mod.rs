@@ -92,7 +92,31 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Option<Expr> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Option<Expr> {
+        let left = self.equality()?;
+
+        if let Some(Token {
+            kind: TokenKind::Assign,
+            ..
+        }) = self.first()
+        {
+            self.bump();
+
+            let value = self.assignment()?;
+
+            match left {
+                Expr::Variable(name) => Some(Expr::Assign {
+                    name,
+                    value: Box::new(value),
+                }),
+                _ => None,
+            }
+        } else {
+            Some(left)
+        }
     }
 
     fn equality(&mut self) -> Option<Expr> {

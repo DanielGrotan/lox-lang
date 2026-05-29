@@ -20,4 +20,13 @@ impl Environment {
     pub fn get(&self, name: &str) -> Option<&Value> {
         self.values.get(name)
     }
+
+    pub fn assign(&mut self, name: &str, value: Value) -> Option<Value> {
+        if let Some(v) = self.values.get_mut(name) {
+            *v = value.clone();
+            Some(value)
+        } else {
+            None
+        }
+    }
 }

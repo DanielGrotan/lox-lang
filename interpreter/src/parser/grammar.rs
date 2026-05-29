@@ -27,6 +27,10 @@ pub enum Expr {
         op: UnaryOp,
         right: Box<Expr>,
     },
+    Assign {
+        name: String,
+        value: Box<Expr>,
+    },
     Binary {
         left: Box<Expr>,
         op: BinaryOp,
@@ -45,6 +49,7 @@ impl fmt::Display for Expr {
             Expr::Unary { op, right } => write!(f, "{op}{right}"),
             Expr::Binary { left, op, right } => write!(f, "{left} {op} {right}"),
             Expr::Grouping { expr } => write!(f, "({expr})"),
+            Expr::Assign { name, value } => write!(f, "{name} = {value}"),
         }
     }
 }

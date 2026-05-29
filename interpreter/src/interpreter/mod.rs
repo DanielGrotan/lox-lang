@@ -42,7 +42,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_print(&self, expr: &Expr) -> Result<()> {
+    fn execute_print(&mut self, expr: &Expr) -> Result<()> {
         let value = self.evaluate(expr)?;
         println!("{value}");
 
@@ -60,13 +60,14 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&self, expr: &Expr) -> Result<Value> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
         Ok(match expr {
             Expr::Literal(literal) => self.evaluate_literal(literal),
             Expr::Unary { op, right } => self.evaluate_unary(*op, right)?,
             Expr::Binary { left, op, right } => self.evaluate_binary(left, *op, right)?,
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Variable(name) => self.evaluate_variable(name)?,
+            Expr::Assign { name, value } => self.evaluate_assign(name, value)?,
         })
     }
 
@@ -79,7 +80,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate_unary(&self, op: UnaryOp, right: &Expr) -> Result<Value> {
+    fn evaluate_unary(&mut self, op: UnaryOp, right: &Expr) -> Result<Value> {
         let value = self.evaluate(right)?;
 
         Ok(match (op, value) {
@@ -89,7 +90,7 @@ impl Interpreter {
         })
     }
 
-    fn evaluate_binary(&self, left: &Expr, op: BinaryOp, right: &Expr) -> Result<Value> {
+    fn evaluate_binary(&mut self, left: &Expr, op: BinaryOp, right: &Expr) -> Result<Value> {
         let left_value = self.evaluate(left)?;
         let right_value = self.evaluate(right)?;
 
@@ -119,6 +120,15 @@ impl Interpreter {
         self.environment
             .get(name)
             .cloned()
+            .ok_or_else(|| Error::VariableNotFound {
+                name: name.to_string(),
+            })
+    }
+
+    fn evaluate_assign(&mut self, name: &str, expr: &Expr) -> Result<Value> {
+        let value = self.evaluate(expr)?;
+        self.environment
+            .assign(name, value)
             .ok_or_else(|| Error::VariableNotFound {
                 name: name.to_string(),
             })
