@@ -1,9 +1,9 @@
-use std::mem::discriminant;
+use std::mem;
 
 use crate::lexer::{Token, TokenKind};
 
-mod expr;
-pub use expr::*;
+mod grammar;
+pub use grammar::*;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -15,8 +15,80 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Option<Expr> {
-        self.expression()
+    pub fn parse(&mut self) -> Option<Program> {
+        let mut statements = Vec::new();
+
+        while !self.is_at_end() {
+            if let Some(stmt) = self.declaration() {
+                statements.push(stmt);
+            } else {
+                self.synchronize();
+            }
+        }
+
+        Some(Program::new(statements))
+    }
+
+    fn declaration(&mut self) -> Option<Stmt> {
+        let token = self.first()?;
+
+        match token.kind {
+            TokenKind::Var => {
+                self.bump();
+                self.var_declaration()
+            }
+            _ => self.statement(),
+        }
+    }
+
+    fn var_declaration(&mut self) -> Option<Stmt> {
+        let token = self.first()?;
+        let name = match &token.kind {
+            TokenKind::Identifier(name) => {
+                let name = name.clone();
+                self.bump();
+                name
+            }
+            _ => return None,
+        };
+
+        let initializer = if self.consume(TokenKind::Assign).is_some() {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenKind::Semicolon)?;
+
+        Some(Stmt::Var { name, initializer })
+    }
+
+    fn statement(&mut self) -> Option<Stmt> {
+        let token = self.first()?;
+
+        match &token.kind {
+            TokenKind::Print => {
+                self.bump();
+                self.print_statement()
+            }
+            _ => self.expression_statement(),
+        }
+    }
+
+    fn print_statement(&mut self) -> Option<Stmt> {
+        let expr = self.expression()?;
+
+        self.consume(TokenKind::Semicolon)?;
+
+        Some(Stmt::Print(expr))
+    }
+
+    fn expression_statement(&mut self) -> Option<Stmt> {
+        let expr = self.expression()?;
+
+        self.consume(TokenKind::Semicolon)?;
+
+        Some(Stmt::Expr(expr))
     }
 
     fn expression(&mut self) -> Option<Expr> {
@@ -112,15 +184,15 @@ impl Parser {
             TokenKind::Nil => Expr::Literal(Literal::Nil),
             TokenKind::String(s) => Expr::Literal(Literal::String(s.into())),
             TokenKind::Number(n) => Expr::Literal(Literal::Number(*n)),
+            TokenKind::Identifier(name) => Expr::Variable(name.clone()),
             TokenKind::LParen => {
-                self.bump();
                 let expr = self.expression()?;
                 self.consume(TokenKind::RParen)?;
-                Expr::Grouping {
+                return Some(Expr::Grouping {
                     expr: Box::new(expr),
-                }
+                });
             }
-            _ => panic!("unexpected token: {token:?}"),
+            _ => return None,
         };
         self.bump();
 
@@ -161,15 +233,23 @@ impl Parser {
         self.tokens.get(self.current)
     }
 
-    fn consume(&mut self, expected: TokenKind) -> Option<()> {
+    fn second(&self) -> Option<&Token> {
+        self.tokens.get(self.current + 1)
+    }
+
+    fn consume(&mut self, kind: TokenKind) -> Option<()> {
         let token = self.first()?;
 
-        if discriminant(&token.kind) == discriminant(&expected) {
+        if mem::discriminant(&token.kind) == mem::discriminant(&kind) {
             self.bump();
             Some(())
         } else {
             None
         }
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.current >= self.tokens.len()
     }
 
     fn synchronize(&mut self) {

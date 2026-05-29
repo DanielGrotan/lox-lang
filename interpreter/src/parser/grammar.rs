@@ -1,8 +1,28 @@
 use std::fmt;
 
+pub struct Program {
+    pub statements: Vec<Stmt>,
+}
+
+impl Program {
+    pub fn new(statements: Vec<Stmt>) -> Self {
+        Self { statements }
+    }
+}
+
+pub enum Stmt {
+    Expr(Expr),
+    Print(Expr),
+    Var {
+        name: String,
+        initializer: Option<Expr>,
+    },
+}
+
 #[derive(Debug)]
 pub enum Expr {
     Literal(Literal),
+    Variable(String),
     Unary {
         op: UnaryOp,
         right: Box<Expr>,
@@ -21,6 +41,7 @@ impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expr::Literal(literal) => write!(f, "{literal}"),
+            Expr::Variable(name) => write!(f, "{name}"),
             Expr::Unary { op, right } => write!(f, "{op}{right}"),
             Expr::Binary { left, op, right } => write!(f, "{left} {op} {right}"),
             Expr::Grouping { expr } => write!(f, "({expr})"),
@@ -28,7 +49,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
@@ -47,7 +68,7 @@ impl fmt::Display for Literal {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum UnaryOp {
     Negate,
     Not,
@@ -62,7 +83,7 @@ impl fmt::Display for UnaryOp {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum BinaryOp {
     Add,
     Sub,

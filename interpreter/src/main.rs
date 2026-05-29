@@ -5,11 +5,13 @@ use std::{
 };
 
 mod error;
+mod interpreter;
 mod lexer;
 mod parser;
 
 use crate::{
     error::{Error, Result},
+    interpreter::Interpreter,
     lexer::{Lexer, TokenKind},
     parser::Parser,
 };
@@ -24,21 +26,23 @@ fn main() -> Result<()> {
         process::exit(0);
     }
 
+    let interpreter = Interpreter::new();
+
     if let Some(script_path) = args.next() {
-        run_script(script_path)
+        run_script(script_path, interpreter)
     } else {
-        run_repl()
+        run_repl(interpreter)
     }
 }
 
-fn run_script(script_path: String) -> Result<()> {
+fn run_script(script_path: String, mut interpreter: Interpreter) -> Result<()> {
     let content = fs::read(script_path).map_err(|_| Error::ScriptNotFound)?;
     let src = String::from_utf8(content).map_err(|_| Error::InvalidEncoding)?;
 
-    run(&src)
+    run(&src, &mut interpreter)
 }
 
-fn run_repl() -> Result<()> {
+fn run_repl(mut interpreter: Interpreter) -> Result<()> {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
 
@@ -63,13 +67,13 @@ fn run_repl() -> Result<()> {
             continue;
         }
 
-        let _ = run(input);
+        let _ = run(input, &mut interpreter);
     }
 
     Ok(())
 }
 
-fn run(src: &str) -> Result<()> {
+fn run(src: &str, interpreter: &mut Interpreter) -> Result<()> {
     let mut lexer = Lexer::new(src);
     let mut tokens = Vec::new();
 
@@ -85,8 +89,10 @@ fn run(src: &str) -> Result<()> {
     }
 
     let mut parser = Parser::new(tokens);
-    if let Some(expr) = parser.parse() {
-        println!("{expr}");
+    if let Some(program) = parser.parse() {
+        if let Err(error) = interpreter.interpret(&program) {
+            println!("{error:?}");
+        };
     }
 
     Ok(())
