@@ -77,9 +77,17 @@ impl Parser {
                 self.bump();
                 self.print_statement()
             }
+            TokenKind::If => {
+                self.bump();
+                self.if_statement()
+            }
             TokenKind::LBrace => {
                 self.bump();
                 self.block()
+            }
+            TokenKind::While => {
+                self.bump();
+                self.r#while()
             }
             _ => self.expression_statement(),
         }
@@ -91,6 +99,24 @@ impl Parser {
         self.consume(TokenKind::Semicolon)?;
 
         Ok(Stmt::Print(expr))
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt> {
+        self.consume(TokenKind::LParen)?;
+        let condition = self.expression()?;
+        self.consume(TokenKind::RParen)?;
+
+        let then_branch = Box::new(self.statement()?);
+        let else_branch = match self.consume(TokenKind::Else) {
+            Ok(_) => Some(Box::new(self.statement()?)),
+            _ => None,
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_branch,
+            else_branch,
+        })
     }
 
     fn block(&mut self) -> Result<Stmt> {
@@ -108,6 +134,15 @@ impl Parser {
         Ok(Stmt::Block(statements))
     }
 
+    fn r#while(&mut self) -> Result<Stmt> {
+        self.consume(TokenKind::LParen)?;
+        let condition = self.expression()?;
+        self.consume(TokenKind::RParen)?;
+        let body = Box::new(self.statement()?);
+
+        Ok(Stmt::While { condition, body })
+    }
+
     fn expression_statement(&mut self) -> Result<Stmt> {
         let expr = self.expression()?;
 
@@ -121,7 +156,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr> {
-        let left = self.equality()?;
+        let left = self.or()?;
 
         if matches!(self.peek_kind(), TokenKind::Assign) {
             self.bump();
@@ -138,6 +173,32 @@ impl Parser {
         } else {
             Ok(left)
         }
+    }
+
+    fn or(&mut self) -> Result<Expr> {
+        let lhs = self.and()?;
+
+        self.logical_left_associative(
+            lhs,
+            |k| match k {
+                TokenKind::Or => Some(LogicalOp::Or),
+                _ => None,
+            },
+            Self::and,
+        )
+    }
+
+    fn and(&mut self) -> Result<Expr> {
+        let lhs = self.equality()?;
+
+        self.logical_left_associative(
+            lhs,
+            |k| match k {
+                TokenKind::And => Some(LogicalOp::And),
+                _ => None,
+            },
+            Self::equality,
+        )
     }
 
     fn equality(&mut self) -> Result<Expr> {
@@ -275,6 +336,32 @@ impl Parser {
             let rhs = next_parse(self)?;
 
             lhs = Expr::Binary {
+                left: Box::new(lhs),
+                op,
+                right: Box::new(rhs),
+            }
+        }
+
+        Ok(lhs)
+    }
+
+    fn logical_left_associative(
+        &mut self,
+        mut lhs: Expr,
+        next_precedence: fn(&TokenKind) -> Option<LogicalOp>,
+        next_parse: fn(&mut Self) -> Result<Expr>,
+    ) -> Result<Expr> {
+        loop {
+            let op = match next_precedence(self.peek_kind()) {
+                Some(op) => op,
+                None => break,
+            };
+
+            self.bump();
+
+            let rhs = next_parse(self)?;
+
+            lhs = Expr::Logical {
                 left: Box::new(lhs),
                 op,
                 right: Box::new(rhs),

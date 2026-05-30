@@ -14,10 +14,19 @@ impl Program {
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expr(Expr),
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
     Print(Expr),
     Var {
         name: String,
         initializer: Option<Expr>,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
     },
 }
 
@@ -38,6 +47,11 @@ pub enum Expr {
         op: BinaryOp,
         right: Box<Expr>,
     },
+    Logical {
+        left: Box<Expr>,
+        op: LogicalOp,
+        right: Box<Expr>,
+    },
     Grouping {
         expr: Box<Expr>,
     },
@@ -52,6 +66,7 @@ impl fmt::Display for Expr {
             Expr::Binary { left, op, right } => write!(f, "{left} {op} {right}"),
             Expr::Grouping { expr } => write!(f, "({expr})"),
             Expr::Assign { name, value } => write!(f, "{name} = {value}"),
+            Expr::Logical { left, op, right } => write!(f, "{left} {op} {right}"),
         }
     }
 }
@@ -117,6 +132,21 @@ impl fmt::Display for BinaryOp {
             BinaryOp::Lte => write!(f, "<="),
             BinaryOp::Gt => write!(f, ">"),
             BinaryOp::Gte => write!(f, ">="),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum LogicalOp {
+    Or,
+    And,
+}
+
+impl fmt::Display for LogicalOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LogicalOp::Or => write!(f, "or"),
+            LogicalOp::And => write!(f, "and"),
         }
     }
 }

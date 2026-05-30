@@ -4,7 +4,7 @@ mod environment;
 mod error;
 mod value;
 
-use crate::parser::{BinaryOp, Expr, Literal, Program, Stmt, UnaryOp};
+use crate::parser::{BinaryOp, Expr, Literal, LogicalOp, Program, Stmt, UnaryOp};
 
 pub use environment::*;
 pub use error::*;
@@ -35,6 +35,12 @@ impl Interpreter {
             Stmt::Print(expr) => self.execute_print(expr),
             Stmt::Var { name, initializer } => self.execute_var(name, initializer.as_ref()),
             Stmt::Block(stmts) => self.execute_block(stmts),
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => self.execute_if(condition, then_branch, else_branch.as_deref()),
+            Stmt::While { condition, body } => self.execute_while(condition, body),
         }
     }
 
@@ -77,6 +83,32 @@ impl Interpreter {
         Ok(())
     }
 
+    fn execute_if(
+        &mut self,
+        condition: &Expr,
+        then_branch: &Stmt,
+        else_branch: Option<&Stmt>,
+    ) -> Result<()> {
+        let branch = if self.evaluate(condition)?.is_truthy() {
+            Some(then_branch)
+        } else {
+            else_branch
+        };
+
+        match branch {
+            Some(stmt) => self.execute(stmt),
+            None => Ok(()),
+        }
+    }
+
+    fn execute_while(&mut self, condition: &Expr, body: &Stmt) -> Result<()> {
+        while self.evaluate(condition)?.is_truthy() {
+            self.execute(body)?;
+        }
+
+        Ok(())
+    }
+
     fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
         Ok(match expr {
             Expr::Literal(literal) => self.evaluate_literal(literal),
@@ -85,6 +117,7 @@ impl Interpreter {
             Expr::Grouping { expr } => self.evaluate(expr)?,
             Expr::Variable(name) => self.evaluate_variable(name)?,
             Expr::Assign { name, value } => self.evaluate_assign(name, value)?,
+            Expr::Logical { left, op, right } => self.evaluate_logical(left, *op, right)?,
         })
     }
 
@@ -154,5 +187,15 @@ impl Interpreter {
             .assign(name, value.clone())
             .ok_or_else(|| RuntimeError::VariableNotFound(name.to_string()))?;
         Ok(value)
+    }
+
+    fn evaluate_logical(&mut self, left: &Expr, op: LogicalOp, right: &Expr) -> Result<Value> {
+        let left = self.evaluate(left)?;
+
+        match (left.is_truthy(), op) {
+            (true, LogicalOp::Or) => Ok(left),
+            (false, LogicalOp::And) => Ok(left),
+            _ => self.evaluate(right),
+        }
     }
 }
