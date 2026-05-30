@@ -10,10 +10,15 @@ impl Program {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expr(Expr),
+    Function {
+        name: String,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+    },
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -30,7 +35,7 @@ pub enum Stmt {
     },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expr {
     Literal(Literal),
     Variable(String),

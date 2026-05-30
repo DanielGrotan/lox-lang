@@ -1,7 +1,14 @@
-var start = clock();
-var diff = 0;
+fun sleep(secs) {
+  var start = clock();
+  var diff = 0;
 
-while (diff < 1) {
-  diff = clock() - start;
-  print diff;
+  while (diff < 1) {
+    diff = clock() - start;
+  }
 }
+
+print "sleeping for 1 sec...";
+sleep(1);
+print "done sleeping";
+
+print sleep;

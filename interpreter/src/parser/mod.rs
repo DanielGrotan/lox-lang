@@ -37,12 +37,44 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Stmt> {
         match self.peek_kind() {
+            TokenKind::Fun => {
+                self.bump();
+                self.function()
+            }
             TokenKind::Var => {
                 self.bump();
                 self.var_declaration()
             }
             _ => self.statement(),
         }
+    }
+
+    fn function(&mut self) -> Result<Stmt> {
+        let name = self.consume_ident()?;
+
+        self.consume(TokenKind::LParen)?;
+        let mut params = Vec::new();
+
+        if !matches!(self.peek_kind(), TokenKind::RParen) {
+            loop {
+                if params.len() >= 255 {
+                    return Err(SyntaxError::TooManyArguments);
+                }
+
+                params.push(self.consume_ident()?);
+
+                if !self.consume(TokenKind::Comma).is_ok() {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenKind::RParen)?;
+
+        self.consume(TokenKind::LBrace)?;
+        let body = self.block_statements()?;
+
+        Ok(Stmt::Function { name, params, body })
     }
 
     fn var_declaration(&mut self) -> Result<Stmt> {
@@ -124,18 +156,19 @@ impl Parser {
     }
 
     fn block(&mut self) -> Result<Stmt> {
+        Ok(Stmt::Block(self.block_statements()?))
+    }
+
+    fn block_statements(&mut self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
 
-        loop {
-            if matches!(self.peek_kind(), TokenKind::RBrace) {
-                break;
-            }
+        while !matches!(self.peek_kind(), TokenKind::RBrace) {
             statements.push(self.declaration()?)
         }
 
         self.consume(TokenKind::RBrace)?;
 
-        Ok(Stmt::Block(statements))
+        Ok(statements)
     }
 
     fn r#while(&mut self) -> Result<Stmt> {
@@ -483,6 +516,24 @@ impl Parser {
                 expected: vec![expected],
                 found: found.clone(),
             })
+        }
+    }
+
+    fn consume_ident(&mut self) -> Result<String> {
+        match self.peek() {
+            Token {
+                kind: TokenKind::Identifier,
+                lexeme,
+                ..
+            } => {
+                let name = lexeme.clone().unwrap();
+                self.bump();
+                Ok(name)
+            }
+            t => Err(SyntaxError::UnexpectedToken {
+                expected: vec![TokenKind::Identifier],
+                found: t.kind.clone(),
+            }),
         }
     }
 

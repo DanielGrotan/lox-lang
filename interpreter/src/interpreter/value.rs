@@ -1,6 +1,9 @@
-use std::{fmt, rc::Rc};
+use std::{cell::RefCell, fmt, rc::Rc};
 
-use crate::interpreter::{Interpreter, Result, RuntimeError};
+use crate::{
+    interpreter::{Environment, Interpreter, Result, RuntimeError},
+    parser::Stmt,
+};
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -9,6 +12,7 @@ pub enum Value {
     Bool(bool),
     Nil,
     NativeFunction(Rc<NativeFunction>),
+    Function(Rc<LoxFunction>),
 }
 
 impl Value {
@@ -23,13 +27,23 @@ impl Value {
         match self {
             Value::NativeFunction(f) => {
                 if args.len() != f.arity {
-                    return Err(RuntimeError::ArityMismatch {
+                    Err(RuntimeError::ArityMismatch {
                         expected: f.arity,
                         found: args.len(),
-                    });
+                    })
+                } else {
+                    (f.function)(args)
                 }
-
-                (f.function)(args)
+            }
+            Value::Function(f) => {
+                if args.len() != f.params.len() {
+                    Err(RuntimeError::ArityMismatch {
+                        expected: f.params.len(),
+                        found: args.len(),
+                    })
+                } else {
+                    f.call(interpreter, args)
+                }
             }
             _ => Err(RuntimeError::NotCallable),
         }
@@ -56,6 +70,7 @@ impl fmt::Display for Value {
             Value::Bool(b) => write!(f, "{b}"),
             Value::Nil => write!(f, "nil"),
             Value::NativeFunction(native) => write!(f, "<native fun {}>", native.name),
+            Value::Function(function) => write!(f, "<fun {}>", function.name),
         }
     }
 }
@@ -68,12 +83,34 @@ pub struct NativeFunction {
 }
 
 #[derive(Debug)]
+pub struct LoxFunction {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Vec<Stmt>,
+}
+
+impl LoxFunction {
+    pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
+        let mut env = Environment::child(interpreter.globals.clone());
+
+        for (param, arg) in self.params.iter().zip(args) {
+            env.define(param.clone(), arg);
+        }
+
+        interpreter.execute_block(&self.body, Rc::new(RefCell::new(env)))?;
+
+        Ok(Value::Nil)
+    }
+}
+
+#[derive(Debug)]
 pub enum ValueKind {
     Number,
     String,
     Bool,
     Nil,
     NativeFunction,
+    Function,
 }
 
 impl fmt::Display for ValueKind {
@@ -86,6 +123,7 @@ impl fmt::Display for ValueKind {
             Bool => write!(f, "bool"),
             Nil => write!(f, "nil"),
             NativeFunction => write!(f, "native_function"),
+            Function => write!(f, "function"),
         }
     }
 }
@@ -98,6 +136,7 @@ impl From<Value> for ValueKind {
             Value::Bool(_) => Self::Bool,
             Value::Nil => Self::Nil,
             Value::NativeFunction(_) => Self::NativeFunction,
+            Value::Function(_) => Self::Function,
         }
     }
 }

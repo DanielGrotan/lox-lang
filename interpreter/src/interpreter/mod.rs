@@ -15,6 +15,7 @@ pub use error::*;
 pub use value::*;
 
 pub struct Interpreter {
+    globals: EnvRef,
     environment: EnvRef,
 }
 
@@ -31,6 +32,7 @@ impl Interpreter {
         );
 
         Self {
+            globals: globals.clone(),
             environment: globals,
         }
     }
@@ -48,13 +50,19 @@ impl Interpreter {
             Stmt::Expr(expr) => self.execute_expr(expr),
             Stmt::Print(expr) => self.execute_print(expr),
             Stmt::Var { name, initializer } => self.execute_var(name, initializer.as_ref()),
-            Stmt::Block(stmts) => self.execute_block(stmts),
+            Stmt::Block(stmts) => self.execute_block(
+                stmts,
+                Rc::new(RefCell::new(Environment::child(self.environment.clone()))),
+            ),
             Stmt::If {
                 condition,
                 then_branch,
                 else_branch,
             } => self.execute_if(condition, then_branch, else_branch.as_deref()),
             Stmt::While { condition, body } => self.execute_while(condition, body),
+            Stmt::Function { name, params, body } => {
+                self.execute_function(name.clone(), params.to_vec(), body.to_vec())
+            }
         }
     }
 
@@ -84,9 +92,9 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<()> {
+    fn execute_block(&mut self, statements: &Vec<Stmt>, environment: EnvRef) -> Result<()> {
         let previous = self.environment.clone();
-        self.environment = Rc::new(RefCell::new(Environment::child(previous.clone())));
+        self.environment = environment;
 
         for stmt in statements {
             self.execute(stmt)?;
@@ -120,6 +128,19 @@ impl Interpreter {
             self.execute(body)?;
         }
 
+        Ok(())
+    }
+
+    fn execute_function(
+        &mut self,
+        name: String,
+        params: Vec<String>,
+        body: Vec<Stmt>,
+    ) -> Result<()> {
+        self.environment.borrow_mut().define(
+            name.clone(),
+            Value::Function(LoxFunction { name, params, body }.into()),
+        );
         Ok(())
     }
 
