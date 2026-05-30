@@ -39,7 +39,9 @@ fn run_script(script_path: String, mut interpreter: Interpreter) -> Result<()> {
     let content = fs::read(script_path).map_err(|_| Error::ScriptNotFound)?;
     let src = String::from_utf8(content).map_err(|_| Error::InvalidEncoding)?;
 
-    run(&src, &mut interpreter)
+    run(&src, &mut interpreter);
+
+    Ok(())
 }
 
 fn run_repl(mut interpreter: Interpreter) -> Result<()> {
@@ -69,18 +71,24 @@ fn run_repl(mut interpreter: Interpreter) -> Result<()> {
             continue;
         }
 
-        let _ = run(input, &mut interpreter);
+        run(input, &mut interpreter);
     }
 
     Ok(())
 }
 
-fn run(src: &str, interpreter: &mut Interpreter) -> Result<()> {
+fn run(src: &str, interpreter: &mut Interpreter) {
     let mut lexer = Lexer::new(src);
     let mut tokens = Vec::new();
 
     loop {
-        let token = lexer.next_token();
+        let token = match lexer.next_token() {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("error: {e}");
+                return;
+            }
+        };
         let is_eof = matches!(token.kind, TokenKind::Eof);
 
         tokens.push(token);
@@ -100,6 +108,4 @@ fn run(src: &str, interpreter: &mut Interpreter) -> Result<()> {
     if let Err(e) = interpreter.interpret(&program) {
         eprintln!("{e}");
     };
-
-    Ok(())
 }

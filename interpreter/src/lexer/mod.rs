@@ -1,3 +1,6 @@
+mod error;
+pub use error::*;
+
 pub mod token;
 pub use token::*;
 
@@ -14,10 +17,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn next_token(&mut self) -> Token {
+    pub fn next_token(&mut self) -> Result<Token> {
         loop {
             let Some(first_char) = self.bump() else {
-                return Token::new(TokenKind::Eof, None, self.line);
+                return Ok(Token::new(TokenKind::Eof, None, self.line));
             };
 
             if first_char.is_whitespace() {
@@ -47,17 +50,21 @@ impl<'a> Lexer<'a> {
                 '<' => (self.two_char('=', TokenKind::Lte, TokenKind::Lt), None),
                 '>' => (self.two_char('=', TokenKind::Gte, TokenKind::Gt), None),
 
-                '"' => match self.string() {
-                    Some(s) => (TokenKind::String, Some(s)),
-                    None => panic!("unterminated string"),
-                },
+                '"' => {
+                    let string = self.string().ok_or(LexError::UnterminatedString)?;
+
+                    (TokenKind::String, Some(string))
+                }
                 c if c.is_ascii_digit() => (TokenKind::Number, Some(self.number(c))),
                 c if Self::is_ident_start(c) => Self::keyword(self.identifier(c)),
 
-                _ => panic!("unexpected character"),
+                c => {
+                    self.bump();
+                    return Err(LexError::InvalidCharacter(c));
+                }
             };
 
-            return Token::new(token_kind, lexeme, self.line);
+            return Ok(Token::new(token_kind, lexeme, self.line));
         }
     }
 

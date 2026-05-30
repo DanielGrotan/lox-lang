@@ -27,7 +27,12 @@ impl fmt::Display for SyntaxError {
 
                 write!(
                     f,
-                    "unexpected token `{found}`; expected one of: {expected_list}"
+                    "unexpected token `{found}`; expected{}: {expected_list}",
+                    if expected_list.len() == 1 {
+                        ""
+                    } else {
+                        " one of"
+                    }
                 )
             }
             InvalidExpression => write!(f, "invalid expression"),
