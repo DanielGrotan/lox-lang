@@ -1,15 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
+mod environment;
+mod error;
+mod value;
+
 use crate::parser::{BinaryOp, Expr, Literal, Program, Stmt, UnaryOp};
 
-pub mod error;
-pub use error::*;
-
-pub mod value;
-pub use value::*;
-
-pub mod environment;
 pub use environment::*;
+pub use error::*;
+pub use value::*;
 
 pub struct Interpreter {
     environment: EnvRef,

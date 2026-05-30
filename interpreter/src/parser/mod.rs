@@ -1,12 +1,12 @@
 use std::mem;
 
+mod error;
+mod grammar;
+
 use crate::lexer::{Token, TokenKind};
 
-mod grammar;
-pub use grammar::*;
-
-mod error;
 pub use error::*;
+pub use grammar::*;
 
 pub struct Parser {
     tokens: Vec<Token>,

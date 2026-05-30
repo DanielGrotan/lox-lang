@@ -1,7 +1,7 @@
 mod error;
-pub use error::*;
+mod token;
 
-pub mod token;
+pub use error::*;
 pub use token::*;
 
 pub struct Lexer<'a> {
