@@ -89,6 +89,10 @@ impl Parser {
                 self.bump();
                 self.r#while()
             }
+            TokenKind::For => {
+                self.bump();
+                self.r#for()
+            }
             _ => self.expression_statement(),
         }
     }
@@ -141,6 +145,48 @@ impl Parser {
         let body = Box::new(self.statement()?);
 
         Ok(Stmt::While { condition, body })
+    }
+
+    fn r#for(&mut self) -> Result<Stmt> {
+        self.consume(TokenKind::LParen)?;
+
+        let initializer = match self.peek_kind() {
+            TokenKind::Semicolon => None,
+            TokenKind::Var => {
+                self.bump();
+                Some(self.var_declaration()?)
+            }
+            _ => Some(self.expression_statement()?),
+        };
+
+        let condition = match self.peek_kind() {
+            TokenKind::Semicolon => Expr::Literal(Literal::Bool(true)),
+            _ => self.expression()?,
+        };
+        self.consume(TokenKind::Semicolon)?;
+
+        let increment = match self.peek_kind() {
+            TokenKind::RParen => None,
+            _ => Some(self.expression()?),
+        };
+        self.consume(TokenKind::RParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(stmt) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expr(stmt)]);
+        }
+
+        body = Stmt::While {
+            condition,
+            body: Box::new(body),
+        };
+
+        if let Some(stmt) = initializer {
+            body = Stmt::Block(vec![stmt, body]);
+        }
+
+        Ok(body)
     }
 
     fn expression_statement(&mut self) -> Result<Stmt> {
