@@ -20,6 +20,11 @@ pub enum RuntimeError {
         right: ValueKind,
     },
     VariableNotFound(String),
+    NotCallable,
+    ArityMismatch {
+        expected: usize,
+        found: usize,
+    },
 }
 
 impl fmt::Display for RuntimeError {
@@ -34,6 +39,11 @@ impl fmt::Display for RuntimeError {
                 write!(f, "undefined binary operator `{op}` for {left} and {right}")
             }
             VariableNotFound(name) => write!(f, "undefined variable `{name}`"),
+            NotCallable => write!(f, "can only call functions and classes"),
+            ArityMismatch { expected, found } => write!(
+                f,
+                "argument count must match function arity; expected `{expected}`, received `{found}`"
+            ),
         }
     }
 }

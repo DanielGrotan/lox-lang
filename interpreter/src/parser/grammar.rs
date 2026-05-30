@@ -47,6 +47,10 @@ pub enum Expr {
         op: BinaryOp,
         right: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
     Logical {
         left: Box<Expr>,
         op: LogicalOp,
@@ -67,6 +71,14 @@ impl fmt::Display for Expr {
             Expr::Grouping { expr } => write!(f, "({expr})"),
             Expr::Assign { name, value } => write!(f, "{name} = {value}"),
             Expr::Logical { left, op, right } => write!(f, "{left} {op} {right}"),
+            Expr::Call { callee, arguments } => {
+                let arguments = arguments
+                    .iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{callee}({arguments})")
+            }
         }
     }
 }

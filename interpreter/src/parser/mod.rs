@@ -309,7 +309,7 @@ impl Parser {
         let op = match self.peek_kind() {
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Minus => UnaryOp::Negate,
-            _ => return self.primary(),
+            _ => return self.call(),
         };
         self.bump();
 
@@ -318,6 +318,48 @@ impl Parser {
         Ok(Expr::Unary {
             op,
             right: Box::new(right),
+        })
+    }
+
+    fn call(&mut self) -> Result<Expr> {
+        let mut expr = self.primary()?;
+
+        loop {
+            match self.peek_kind() {
+                TokenKind::LParen => {
+                    expr = {
+                        self.bump();
+                        self.finish_call(expr)?
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, expr: Expr) -> Result<Expr> {
+        let mut arguments = Vec::new();
+
+        if !matches!(self.peek_kind(), TokenKind::RParen) {
+            loop {
+                if arguments.len() >= 255 {
+                    return Err(SyntaxError::TooManyArguments);
+                }
+                arguments.push(self.expression()?);
+
+                if !self.consume(TokenKind::Comma).is_ok() {
+                    break;
+                }
+            }
+        }
+
+        self.consume(TokenKind::RParen)?;
+
+        Ok(Expr::Call {
+            callee: Box::new(expr),
+            arguments,
         })
     }
 

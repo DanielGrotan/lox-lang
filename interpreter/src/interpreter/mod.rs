@@ -2,9 +2,13 @@ use std::{cell::RefCell, rc::Rc};
 
 mod environment;
 mod error;
+mod native;
 mod value;
 
-use crate::parser::{BinaryOp, Expr, Literal, LogicalOp, Program, Stmt, UnaryOp};
+use crate::{
+    interpreter::native::clock,
+    parser::{BinaryOp, Expr, Literal, LogicalOp, Program, Stmt, UnaryOp},
+};
 
 pub use environment::*;
 pub use error::*;
@@ -16,8 +20,18 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        globals.borrow_mut().define(
+            "clock".into(),
+            Value::NativeFunction(Rc::new(NativeFunction {
+                name: "clock",
+                arity: 0,
+                function: clock,
+            })),
+        );
+
         Self {
-            environment: Rc::new(RefCell::new(Environment::new())),
+            environment: globals,
         }
     }
 
@@ -118,6 +132,7 @@ impl Interpreter {
             Expr::Variable(name) => self.evaluate_variable(name)?,
             Expr::Assign { name, value } => self.evaluate_assign(name, value)?,
             Expr::Logical { left, op, right } => self.evaluate_logical(left, *op, right)?,
+            Expr::Call { callee, arguments } => self.evaluate_call(callee, arguments)?,
         })
     }
 
@@ -197,5 +212,13 @@ impl Interpreter {
             (false, LogicalOp::And) => Ok(left),
             _ => self.evaluate(right),
         }
+    }
+
+    fn evaluate_call(&mut self, callee: &Expr, arguments: &Vec<Expr>) -> Result<Value> {
+        let callee = self.evaluate(callee)?;
+
+        let args: Result<_> = arguments.iter().map(|arg| self.evaluate(arg)).collect();
+
+        callee.call(self, args?)
     }
 }

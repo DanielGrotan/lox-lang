@@ -11,6 +11,7 @@ pub enum SyntaxError {
         found: TokenKind,
     },
     InvalidExpression,
+    TooManyArguments,
 }
 
 impl fmt::Display for SyntaxError {
@@ -36,6 +37,7 @@ impl fmt::Display for SyntaxError {
                 )
             }
             InvalidExpression => write!(f, "invalid expression"),
+            TooManyArguments => write!(f, "too many function arguments"),
         }
     }
 }
