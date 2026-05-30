@@ -17,7 +17,7 @@ impl<'a> Lexer<'a> {
     pub fn next_token(&mut self) -> Token {
         loop {
             let Some(first_char) = self.bump() else {
-                return Token::new(TokenKind::Eof, self.line);
+                return Token::new(TokenKind::Eof, None, self.line);
             };
 
             if first_char.is_whitespace() {
@@ -29,35 +29,35 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            let token_kind = match first_char {
-                '(' => TokenKind::LParen,
-                ')' => TokenKind::RParen,
-                '{' => TokenKind::LBrace,
-                '}' => TokenKind::RBrace,
-                ',' => TokenKind::Comma,
-                '.' => TokenKind::Dot,
-                '-' => TokenKind::Minus,
-                '+' => TokenKind::Plus,
-                ';' => TokenKind::Semicolon,
-                '/' => TokenKind::Slash,
-                '*' => TokenKind::Star,
+            let (token_kind, lexeme) = match first_char {
+                '(' => (TokenKind::LParen, None),
+                ')' => (TokenKind::RParen, None),
+                '{' => (TokenKind::LBrace, None),
+                '}' => (TokenKind::RBrace, None),
+                ',' => (TokenKind::Comma, None),
+                '.' => (TokenKind::Dot, None),
+                '-' => (TokenKind::Minus, None),
+                '+' => (TokenKind::Plus, None),
+                ';' => (TokenKind::Semicolon, None),
+                '/' => (TokenKind::Slash, None),
+                '*' => (TokenKind::Star, None),
 
-                '!' => self.two_char('=', TokenKind::Neq, TokenKind::Bang),
-                '=' => self.two_char('=', TokenKind::Eq, TokenKind::Assign),
-                '<' => self.two_char('=', TokenKind::Lte, TokenKind::Lt),
-                '>' => self.two_char('=', TokenKind::Gte, TokenKind::Gt),
+                '!' => (self.two_char('=', TokenKind::Neq, TokenKind::Bang), None),
+                '=' => (self.two_char('=', TokenKind::Eq, TokenKind::Assign), None),
+                '<' => (self.two_char('=', TokenKind::Lte, TokenKind::Lt), None),
+                '>' => (self.two_char('=', TokenKind::Gte, TokenKind::Gt), None),
 
                 '"' => match self.string() {
-                    Some(s) => TokenKind::String(s),
+                    Some(s) => (TokenKind::String, Some(s)),
                     None => panic!("unterminated string"),
                 },
-                c if c.is_ascii_digit() => TokenKind::Number(self.number(c)),
+                c if c.is_ascii_digit() => (TokenKind::Number, Some(self.number(c))),
                 c if Self::is_ident_start(c) => Self::keyword(self.identifier(c)),
 
-                _ => todo!(),
+                _ => panic!("unexpected character"),
             };
 
-            return Token::new(token_kind, self.line);
+            return Token::new(token_kind, lexeme, self.line);
         }
     }
 
@@ -115,7 +115,7 @@ impl<'a> Lexer<'a> {
         None
     }
 
-    fn number(&mut self, first: char) -> f64 {
+    fn number(&mut self, first: char) -> String {
         let mut s = String::new();
         s.push(first);
 
@@ -144,7 +144,7 @@ impl<'a> Lexer<'a> {
             _ => (),
         }
 
-        s.parse().unwrap()
+        s
     }
 
     fn is_ident_start(c: char) -> bool {
@@ -171,25 +171,25 @@ impl<'a> Lexer<'a> {
         s
     }
 
-    fn keyword(identifier: String) -> TokenKind {
+    fn keyword(identifier: String) -> (TokenKind, Option<String>) {
         match identifier.as_str() {
-            "and" => TokenKind::And,
-            "class" => TokenKind::Class,
-            "else" => TokenKind::Else,
-            "false" => TokenKind::False,
-            "fun" => TokenKind::Fun,
-            "for" => TokenKind::For,
-            "if" => TokenKind::If,
-            "nil" => TokenKind::Nil,
-            "or" => TokenKind::Or,
-            "print" => TokenKind::Print,
-            "return" => TokenKind::Return,
-            "super" => TokenKind::Super,
-            "this" => TokenKind::This,
-            "true" => TokenKind::True,
-            "var" => TokenKind::Var,
-            "while" => TokenKind::While,
-            _ => TokenKind::Identifier(identifier),
+            "and" => (TokenKind::And, None),
+            "class" => (TokenKind::Class, None),
+            "else" => (TokenKind::Else, None),
+            "false" => (TokenKind::False, None),
+            "fun" => (TokenKind::Fun, None),
+            "for" => (TokenKind::For, None),
+            "if" => (TokenKind::If, None),
+            "nil" => (TokenKind::Nil, None),
+            "or" => (TokenKind::Or, None),
+            "print" => (TokenKind::Print, None),
+            "return" => (TokenKind::Return, None),
+            "super" => (TokenKind::Super, None),
+            "this" => (TokenKind::This, None),
+            "true" => (TokenKind::True, None),
+            "var" => (TokenKind::Var, None),
+            "while" => (TokenKind::While, None),
+            _ => (TokenKind::Identifier, Some(identifier)),
         }
     }
 }

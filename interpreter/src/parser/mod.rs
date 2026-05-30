@@ -5,6 +5,9 @@ use crate::lexer::{Token, TokenKind};
 mod grammar;
 pub use grammar::*;
 
+mod error;
+pub use error::*;
+
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
@@ -15,24 +18,25 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Option<Program> {
+    pub fn parse(&mut self) -> (Program, Vec<SyntaxError>) {
         let mut statements = Vec::new();
+        let mut errors = Vec::new();
 
         while !self.is_at_end() {
-            if let Some(stmt) = self.declaration() {
-                statements.push(stmt);
-            } else {
-                self.synchronize();
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => {
+                    errors.push(e);
+                    self.synchronize();
+                }
             }
         }
 
-        Some(Program::new(statements))
+        (Program::new(statements), errors)
     }
 
-    fn declaration(&mut self) -> Option<Stmt> {
-        let token = self.first()?;
-
-        match token.kind {
+    fn declaration(&mut self) -> Result<Stmt> {
+        match self.peek_kind() {
             TokenKind::Var => {
                 self.bump();
                 self.var_declaration()
@@ -41,18 +45,22 @@ impl Parser {
         }
     }
 
-    fn var_declaration(&mut self) -> Option<Stmt> {
-        let token = self.first()?;
-        let name = match &token.kind {
-            TokenKind::Identifier(name) => {
-                let name = name.clone();
+    fn var_declaration(&mut self) -> Result<Stmt> {
+        let name = match self.peek_kind() {
+            TokenKind::Identifier => {
+                let name = self.peek().lexeme.clone().unwrap();
                 self.bump();
                 name
             }
-            _ => return None,
+            kind => {
+                return Err(SyntaxError::UnexpectedToken {
+                    expected: vec![TokenKind::Identifier],
+                    found: kind.clone(),
+                });
+            }
         };
 
-        let initializer = if self.consume(TokenKind::Assign).is_some() {
+        let initializer = if self.consume(TokenKind::Assign).is_ok() {
             Some(self.expression()?)
         } else {
             None
@@ -60,66 +68,79 @@ impl Parser {
 
         self.consume(TokenKind::Semicolon)?;
 
-        Some(Stmt::Var { name, initializer })
+        Ok(Stmt::Var { name, initializer })
     }
 
-    fn statement(&mut self) -> Option<Stmt> {
-        let token = self.first()?;
-
-        match &token.kind {
+    fn statement(&mut self) -> Result<Stmt> {
+        match self.peek_kind() {
             TokenKind::Print => {
                 self.bump();
                 self.print_statement()
+            }
+            TokenKind::LBrace => {
+                self.bump();
+                self.block()
             }
             _ => self.expression_statement(),
         }
     }
 
-    fn print_statement(&mut self) -> Option<Stmt> {
+    fn print_statement(&mut self) -> Result<Stmt> {
         let expr = self.expression()?;
 
         self.consume(TokenKind::Semicolon)?;
 
-        Some(Stmt::Print(expr))
+        Ok(Stmt::Print(expr))
     }
 
-    fn expression_statement(&mut self) -> Option<Stmt> {
+    fn block(&mut self) -> Result<Stmt> {
+        let mut statements = Vec::new();
+
+        loop {
+            if matches!(self.peek_kind(), TokenKind::RBrace) {
+                break;
+            }
+            statements.push(self.declaration()?)
+        }
+
+        self.consume(TokenKind::RBrace)?;
+
+        Ok(Stmt::Block(statements))
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt> {
         let expr = self.expression()?;
 
         self.consume(TokenKind::Semicolon)?;
 
-        Some(Stmt::Expr(expr))
+        Ok(Stmt::Expr(expr))
     }
 
-    fn expression(&mut self) -> Option<Expr> {
+    fn expression(&mut self) -> Result<Expr> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Option<Expr> {
+    fn assignment(&mut self) -> Result<Expr> {
         let left = self.equality()?;
 
-        if let Some(Token {
-            kind: TokenKind::Assign,
-            ..
-        }) = self.first()
-        {
+        if matches!(self.peek_kind(), TokenKind::Assign) {
             self.bump();
 
             let value = self.assignment()?;
 
             match left {
-                Expr::Variable(name) => Some(Expr::Assign {
+                Expr::Variable(name) => Ok(Expr::Assign {
                     name,
                     value: Box::new(value),
                 }),
-                _ => None,
+                _ => Err(SyntaxError::InvalidExpression),
             }
         } else {
-            Some(left)
+            Ok(left)
         }
     }
 
-    fn equality(&mut self) -> Option<Expr> {
+    fn equality(&mut self) -> Result<Expr> {
         let lhs = self.comparison()?;
 
         self.binary_left_associative(
@@ -133,7 +154,7 @@ impl Parser {
         )
     }
 
-    fn comparison(&mut self) -> Option<Expr> {
+    fn comparison(&mut self) -> Result<Expr> {
         let lhs = self.term()?;
 
         self.binary_left_associative(
@@ -149,7 +170,7 @@ impl Parser {
         )
     }
 
-    fn term(&mut self) -> Option<Expr> {
+    fn term(&mut self) -> Result<Expr> {
         let lhs = self.factor()?;
 
         self.binary_left_associative(
@@ -163,7 +184,7 @@ impl Parser {
         )
     }
 
-    fn factor(&mut self) -> Option<Expr> {
+    fn factor(&mut self) -> Result<Expr> {
         let lhs = self.unary()?;
 
         self.binary_left_associative(
@@ -177,12 +198,8 @@ impl Parser {
         )
     }
 
-    fn unary(&mut self) -> Option<Expr> {
-        let Some(token) = self.first() else {
-            return self.primary();
-        };
-
-        let op = match token.kind {
+    fn unary(&mut self) -> Result<Expr> {
+        let op = match self.peek_kind() {
             TokenKind::Bang => UnaryOp::Not,
             TokenKind::Minus => UnaryOp::Negate,
             _ => return self.primary(),
@@ -191,46 +208,64 @@ impl Parser {
 
         let right = self.unary()?;
 
-        Some(Expr::Unary {
+        Ok(Expr::Unary {
             op,
             right: Box::new(right),
         })
     }
 
-    fn primary(&mut self) -> Option<Expr> {
-        let Some(token) = self.first() else {
-            return None;
-        };
-
-        let literal = match &token.kind {
+    fn primary(&mut self) -> Result<Expr> {
+        let literal = match self.peek_kind() {
             TokenKind::False => Expr::Literal(Literal::Bool(false)),
             TokenKind::True => Expr::Literal(Literal::Bool(true)),
             TokenKind::Nil => Expr::Literal(Literal::Nil),
-            TokenKind::String(s) => Expr::Literal(Literal::String(s.into())),
-            TokenKind::Number(n) => Expr::Literal(Literal::Number(*n)),
-            TokenKind::Identifier(name) => Expr::Variable(name.clone()),
+            TokenKind::String => {
+                Expr::Literal(Literal::String(self.peek().lexeme.clone().unwrap()))
+            }
+            TokenKind::Number => Expr::Literal(Literal::Number(
+                self.peek()
+                    .lexeme
+                    .clone()
+                    .unwrap()
+                    .parse()
+                    .expect("valid decimal number according to lexer"),
+            )),
+            TokenKind::Identifier => Expr::Variable(self.peek().lexeme.clone().unwrap()),
             TokenKind::LParen => {
                 let expr = self.expression()?;
                 self.consume(TokenKind::RParen)?;
-                return Some(Expr::Grouping {
+                return Ok(Expr::Grouping {
                     expr: Box::new(expr),
                 });
             }
-            _ => return None,
+            kind => {
+                return Err(SyntaxError::UnexpectedToken {
+                    expected: vec![
+                        TokenKind::False,
+                        TokenKind::True,
+                        TokenKind::Nil,
+                        TokenKind::String,
+                        TokenKind::Number,
+                        TokenKind::Identifier,
+                        TokenKind::LParen,
+                    ],
+                    found: kind.clone(),
+                });
+            }
         };
         self.bump();
 
-        Some(literal)
+        Ok(literal)
     }
 
     fn binary_left_associative(
         &mut self,
         mut lhs: Expr,
         next_precedence: fn(&TokenKind) -> Option<BinaryOp>,
-        next_parse: fn(&mut Self) -> Option<Expr>,
-    ) -> Option<Expr> {
-        while let Some(token) = self.first() {
-            let op = match next_precedence(&token.kind) {
+        next_parse: fn(&mut Self) -> Result<Expr>,
+    ) -> Result<Expr> {
+        loop {
+            let op = match next_precedence(self.peek_kind()) {
                 Some(op) => op,
                 None => break,
             };
@@ -246,39 +281,43 @@ impl Parser {
             }
         }
 
-        Some(lhs)
+        Ok(lhs)
     }
 
     fn bump(&mut self) {
         self.current += 1;
+
+        debug_assert!(self.current < self.tokens.len());
     }
 
-    fn first(&self) -> Option<&Token> {
-        self.tokens.get(self.current)
+    fn peek(&self) -> &Token {
+        &self.tokens[self.current]
     }
 
-    fn second(&self) -> Option<&Token> {
-        self.tokens.get(self.current + 1)
+    fn peek_kind(&self) -> &TokenKind {
+        &self.tokens[self.current].kind
     }
 
-    fn consume(&mut self, kind: TokenKind) -> Option<()> {
-        let token = self.first()?;
-
-        if mem::discriminant(&token.kind) == mem::discriminant(&kind) {
+    fn consume(&mut self, expected: TokenKind) -> Result<()> {
+        let found = self.peek_kind();
+        if mem::discriminant(found) == mem::discriminant(&expected) {
             self.bump();
-            Some(())
+            Ok(())
         } else {
-            None
+            Err(SyntaxError::UnexpectedToken {
+                expected: vec![expected],
+                found: found.clone(),
+            })
         }
     }
 
     fn is_at_end(&self) -> bool {
-        self.current >= self.tokens.len()
+        matches!(self.peek_kind(), TokenKind::Eof)
     }
 
     fn synchronize(&mut self) {
-        while let Some(token) = self.first() {
-            match token.kind {
+        loop {
+            match self.peek_kind() {
                 TokenKind::Class
                 | TokenKind::Fun
                 | TokenKind::Var
@@ -286,7 +325,8 @@ impl Parser {
                 | TokenKind::If
                 | TokenKind::While
                 | TokenKind::Print
-                | TokenKind::Return => return,
+                | TokenKind::Return
+                | TokenKind::Eof => return,
                 TokenKind::Semicolon => {
                     self.bump();
                     return;

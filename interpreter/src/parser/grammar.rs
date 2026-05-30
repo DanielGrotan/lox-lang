@@ -10,7 +10,9 @@ impl Program {
     }
 }
 
+#[derive(Debug)]
 pub enum Stmt {
+    Block(Vec<Stmt>),
     Expr(Expr),
     Print(Expr),
     Var {

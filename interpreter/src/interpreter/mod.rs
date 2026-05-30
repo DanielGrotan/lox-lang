@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::parser::{BinaryOp, Expr, Literal, Program, Stmt, UnaryOp};
 
 pub mod error;
@@ -10,13 +12,13 @@ pub mod environment;
 pub use environment::*;
 
 pub struct Interpreter {
-    environment: Environment,
+    environment: EnvRef,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: Environment::new(),
+            environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
 
@@ -33,6 +35,7 @@ impl Interpreter {
             Stmt::Expr(expr) => self.execute_expr(expr),
             Stmt::Print(expr) => self.execute_print(expr),
             Stmt::Var { name, initializer } => self.execute_var(name, initializer.as_ref()),
+            Stmt::Block(stmts) => self.execute_block(stmts),
         }
     }
 
@@ -55,7 +58,22 @@ impl Interpreter {
             None => Value::Nil,
         };
 
-        self.environment.define(name.to_string(), value);
+        self.environment
+            .borrow_mut()
+            .define(name.to_string(), value);
+
+        Ok(())
+    }
+
+    fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<()> {
+        let previous = self.environment.clone();
+        self.environment = Rc::new(RefCell::new(Environment::child(previous.clone())));
+
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
+
+        self.environment = previous;
 
         Ok(())
     }
@@ -73,7 +91,7 @@ impl Interpreter {
 
     fn evaluate_literal(&self, literal: &Literal) -> Value {
         match literal {
-            Literal::String(s) => Value::String(s.into()),
+            Literal::String(s) => Value::String(Rc::new(s.to_string())),
             Literal::Number(n) => Value::Number(*n),
             Literal::Bool(b) => Value::Bool(*b),
             Literal::Nil => Value::Nil,
@@ -86,7 +104,12 @@ impl Interpreter {
         Ok(match (op, value) {
             (UnaryOp::Negate, Value::Number(n)) => Value::Number(-n),
             (UnaryOp::Not, l) => Value::Bool(!l.is_truthy()),
-            (op, v) => return Err(Error::UnaryTypeMismatch { op, actual_type: v }),
+            (op, v) => {
+                return Err(RuntimeError::UndefinedUnaryOp {
+                    op,
+                    operand: v.into(),
+                });
+            }
         })
     }
 
@@ -99,7 +122,9 @@ impl Interpreter {
             (Value::Number(l), BinaryOp::Sub, Value::Number(r)) => Value::Number(l - r),
             (Value::Number(l), BinaryOp::Mul, Value::Number(r)) => Value::Number(l * r),
             (Value::Number(l), BinaryOp::Div, Value::Number(r)) => Value::Number(l / r),
-            (Value::String(l), BinaryOp::Add, Value::String(r)) => Value::String(l + &r),
+            (Value::String(l), BinaryOp::Add, Value::String(r)) => {
+                Value::String(Rc::new((*l).clone() + &r))
+            }
             (Value::Number(l), BinaryOp::Gt, Value::Number(r)) => Value::Bool(l > r),
             (Value::Number(l), BinaryOp::Gte, Value::Number(r)) => Value::Bool(l >= r),
             (Value::Number(l), BinaryOp::Lt, Value::Number(r)) => Value::Bool(l < r),
@@ -107,10 +132,10 @@ impl Interpreter {
             (l, BinaryOp::Eq, r) => Value::Bool(l == r),
             (l, BinaryOp::Neq, r) => Value::Bool(l != r),
             (l, op, r) => {
-                return Err(Error::BinaryTypeMismatch {
-                    left_type: l,
+                return Err(RuntimeError::UndefinedBinaryOp {
                     op,
-                    right_type: r,
+                    left: l.into(),
+                    right: r.into(),
                 });
             }
         })
@@ -118,19 +143,17 @@ impl Interpreter {
 
     fn evaluate_variable(&self, name: &str) -> Result<Value> {
         self.environment
+            .borrow()
             .get(name)
-            .cloned()
-            .ok_or_else(|| Error::VariableNotFound {
-                name: name.to_string(),
-            })
+            .ok_or_else(|| RuntimeError::VariableNotFound(name.to_string()))
     }
 
     fn evaluate_assign(&mut self, name: &str, expr: &Expr) -> Result<Value> {
         let value = self.evaluate(expr)?;
         self.environment
-            .assign(name, value)
-            .ok_or_else(|| Error::VariableNotFound {
-                name: name.to_string(),
-            })
+            .borrow_mut()
+            .assign(name, value.clone())
+            .ok_or_else(|| RuntimeError::VariableNotFound(name.to_string()))?;
+        Ok(value)
     }
 }

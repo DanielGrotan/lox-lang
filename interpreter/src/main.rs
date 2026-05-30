@@ -55,7 +55,9 @@ fn run_repl(mut interpreter: Interpreter) -> Result<()> {
 
         line.clear();
 
-        let bytes = handle.read_line(&mut line).expect("invalid encoding");
+        let bytes = handle
+            .read_line(&mut line)
+            .map_err(|_| Error::InvalidEncoding)?;
 
         if bytes == 0 {
             break;
@@ -79,21 +81,25 @@ fn run(src: &str, interpreter: &mut Interpreter) -> Result<()> {
 
     loop {
         let token = lexer.next_token();
-
-        match token.kind {
-            TokenKind::Eof => break,
-            _ => (),
-        }
+        let is_eof = matches!(token.kind, TokenKind::Eof);
 
         tokens.push(token);
+
+        if is_eof {
+            break;
+        }
     }
 
     let mut parser = Parser::new(tokens);
-    if let Some(program) = parser.parse() {
-        if let Err(error) = interpreter.interpret(&program) {
-            println!("{error:?}");
-        };
+    let (program, syntax_errors) = parser.parse();
+
+    for e in syntax_errors {
+        eprintln!("{e}");
     }
+
+    if let Err(e) = interpreter.interpret(&program) {
+        eprintln!("{e}");
+    };
 
     Ok(())
 }
