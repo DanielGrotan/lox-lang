@@ -10,7 +10,7 @@ mod lexer;
 mod parser;
 
 use crate::{
-    error::{Error, Result},
+    error::{CliError, Result},
     interpreter::Interpreter,
     lexer::{Lexer, TokenKind},
     parser::Parser,
@@ -36,8 +36,8 @@ fn main() -> Result<()> {
 }
 
 fn run_script(script_path: String, mut interpreter: Interpreter) -> Result<()> {
-    let content = fs::read(script_path).map_err(|_| Error::ScriptNotFound)?;
-    let src = String::from_utf8(content).map_err(|_| Error::InvalidEncoding)?;
+    let content = fs::read(script_path).map_err(|_| CliError::ScriptNotFound)?;
+    let src = String::from_utf8(content).map_err(|_| CliError::InvalidEncoding)?;
 
     run(&src, &mut interpreter);
 
@@ -59,7 +59,7 @@ fn run_repl(mut interpreter: Interpreter) -> Result<()> {
 
         let bytes = handle
             .read_line(&mut line)
-            .map_err(|_| Error::InvalidEncoding)?;
+            .map_err(|_| CliError::InvalidEncoding)?;
 
         if bytes == 0 {
             break;
