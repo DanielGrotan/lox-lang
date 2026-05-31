@@ -1,6 +1,7 @@
 use std::fmt;
 use std::result;
 
+use crate::interpreter::Value;
 use crate::{
     interpreter::ValueKind,
     parser::{BinaryOp, UnaryOp},
@@ -25,6 +26,7 @@ pub enum RuntimeError {
         expected: usize,
         found: usize,
     },
+    Return(Value),
 }
 
 impl fmt::Display for RuntimeError {
@@ -44,6 +46,7 @@ impl fmt::Display for RuntimeError {
                 f,
                 "argument count must match function arity; expected `{expected}`, received `{found}`"
             ),
+            Return(value) => todo!(),
         }
     }
 }

@@ -97,9 +97,11 @@ impl LoxFunction {
             env.define(param.clone(), arg);
         }
 
-        interpreter.execute_block(&self.body, Rc::new(RefCell::new(env)))?;
-
-        Ok(Value::Nil)
+        match interpreter.execute_block(&self.body, Rc::new(RefCell::new(env))) {
+            Err(RuntimeError::Return(v)) => Ok(v),
+            Err(e) => Err(e),
+            Ok(_) => Ok(Value::Nil),
+        }
     }
 }
 

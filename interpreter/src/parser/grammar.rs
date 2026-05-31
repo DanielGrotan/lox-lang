@@ -25,6 +25,7 @@ pub enum Stmt {
         else_branch: Option<Box<Stmt>>,
     },
     Print(Expr),
+    Return(Option<Expr>),
     Var {
         name: String,
         initializer: Option<Expr>,

@@ -109,6 +109,10 @@ impl Parser {
                 self.bump();
                 self.print_statement()
             }
+            TokenKind::Return => {
+                self.bump();
+                self.r#return()
+            }
             TokenKind::If => {
                 self.bump();
                 self.if_statement()
@@ -135,6 +139,16 @@ impl Parser {
         self.consume(TokenKind::Semicolon)?;
 
         Ok(Stmt::Print(expr))
+    }
+
+    fn r#return(&mut self) -> Result<Stmt> {
+        let value = match self.peek_kind() {
+            TokenKind::Semicolon => None,
+            _ => Some(self.expression()?),
+        };
+        self.consume(TokenKind::Semicolon)?;
+
+        Ok(Stmt::Return(value))
     }
 
     fn if_statement(&mut self) -> Result<Stmt> {

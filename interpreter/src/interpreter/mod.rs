@@ -63,6 +63,7 @@ impl Interpreter {
             Stmt::Function { name, params, body } => {
                 self.execute_function(name.clone(), params.to_vec(), body.to_vec())
             }
+            Stmt::Return(expr) => self.execute_return(expr.as_ref()),
         }
     }
 
@@ -96,13 +97,15 @@ impl Interpreter {
         let previous = self.environment.clone();
         self.environment = environment;
 
-        for stmt in statements {
-            self.execute(stmt)?;
-        }
+        let result = (|| {
+            for stmt in statements {
+                self.execute(stmt)?;
+            }
+            Ok(())
+        })();
 
         self.environment = previous;
-
-        Ok(())
+        result
     }
 
     fn execute_if(
@@ -142,6 +145,15 @@ impl Interpreter {
             Value::Function(LoxFunction { name, params, body }.into()),
         );
         Ok(())
+    }
+
+    fn execute_return(&mut self, value: Option<&Expr>) -> Result<()> {
+        let value = match value {
+            Some(expr) => self.evaluate(expr)?,
+            None => Value::Nil,
+        };
+
+        Err(RuntimeError::Return(value))
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
