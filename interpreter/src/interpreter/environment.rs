@@ -4,7 +4,7 @@ use crate::interpreter::Value;
 
 pub type EnvRef = Rc<RefCell<Environment>>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Environment {
     pub enclosing: Option<EnvRef>,
     values: HashMap<String, Value>,

@@ -1,14 +1,13 @@
-fun sleep(secs) {
-  var start = clock();
-  var diff = 0;
+fun make_counter() {
+  var i = 0;
 
-  while (diff < 1) {
-    diff = clock() - start;
+  fun count() {
+    i = i + 1;
+    print i;
   }
-
-  return "tihi";
+  return count;
 }
 
-print "sleeping for 1 sec...";
-print sleep(1);
-print "done sleeping";
+var count = make_counter();
+count();
+count();

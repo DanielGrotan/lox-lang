@@ -142,7 +142,15 @@ impl Interpreter {
     ) -> Result<()> {
         self.environment.borrow_mut().define(
             name.clone(),
-            Value::Function(LoxFunction { name, params, body }.into()),
+            Value::Function(
+                LoxFunction {
+                    name,
+                    params,
+                    body,
+                    closure: self.environment.clone(),
+                }
+                .into(),
+            ),
         );
         Ok(())
     }

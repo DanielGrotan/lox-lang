@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fmt, rc::Rc};
 
 use crate::{
-    interpreter::{Environment, Interpreter, Result, RuntimeError},
+    interpreter::{EnvRef, Environment, Interpreter, Result, RuntimeError},
     parser::Stmt,
 };
 
@@ -87,11 +87,12 @@ pub struct LoxFunction {
     pub name: String,
     pub params: Vec<String>,
     pub body: Vec<Stmt>,
+    pub closure: EnvRef,
 }
 
 impl LoxFunction {
     pub fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
-        let mut env = Environment::child(interpreter.globals.clone());
+        let mut env = Environment::child(self.closure.clone());
 
         for (param, arg) in self.params.iter().zip(args) {
             env.define(param.clone(), arg);
